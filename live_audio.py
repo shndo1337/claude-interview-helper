@@ -30,6 +30,12 @@ class LiveAudio:
                 while not self.cancelled.is_set():
                     for i, file in enumerate(files):
                         buffers[i].extend(file.read(self.BLOCK_BYTES - len(buffers[i])))
+                    if self.finished.is_set():
+                        # The writers may have appended their last bytes between
+                        # the read above and finished being set. Re-read after
+                        # observing completion before treating EOF as final.
+                        for i, file in enumerate(files):
+                            buffers[i].extend(file.read(self.BLOCK_BYTES - len(buffers[i])))
                     if all(len(b) == self.BLOCK_BYTES for b in buffers):
                         count = self.BLOCK_BYTES
                     elif self.finished.is_set():

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Generate the Plasma launcher for the current checkout location."""
 from pathlib import Path
+import sys
 
 root = Path(__file__).resolve().parent
 target = Path.home() / '.local/share/applications/org.interviewhelper.ClaudeInterview.desktop'
 target.parent.mkdir(parents=True, exist_ok=True)
 # Desktop Entry quoting differs from shell quoting; quoted paths support spaces.
-script = str(root / 'controller.py').replace('\\', '\\\\').replace('"', '\\"').replace('`', '\\`').replace('$', '\\$').replace('%', '%%')
+entry = 'workspace.py' if '--workspace' in sys.argv else 'controller.py'
+script = str(root / entry).replace('\\', '\\\\').replace('"', '\\"').replace('`', '\\`').replace('$', '\\$').replace('%', '%%')
 target.write_text(f'''[Desktop Entry]
 Type=Application
 Name=Claude — собеседование

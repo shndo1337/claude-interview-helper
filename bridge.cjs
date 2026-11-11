@@ -4,7 +4,7 @@ const path = require('node:path');
 const readline = require('node:readline');
 const root = __dirname;
 const shared = path.resolve(root, '../meetingly-review/app');
-const runtime = path.join(root, 'runtime');
+const runtime = process.env.CLAUDE_HELPER_RUNTIME || path.join(root, 'runtime');
 fs.mkdirSync(runtime, {recursive: true, mode: 0o700});
 app.setPath('userData', path.join(runtime, 'bridge-profile'));
 const write = value => process.stdout.write(JSON.stringify(value) + '\n');
@@ -80,6 +80,9 @@ app.whenReady().then(() => {
           break;
         case 'status':
           badge.webContents.executeJavaScript(`document.body.textContent=${JSON.stringify(req.text)}`);
+          // twm does not implement EWMH always-on-top; raise the status badge
+          // within the private display without activating the host viewer.
+          if(process.env.CLAUDE_HELPER_RUNTIME)badge.moveTop();
           break;
         case 'exit':app.quit();return;
         default:throw Error('Неизвестная команда');
