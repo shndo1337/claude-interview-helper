@@ -56,6 +56,7 @@ class WorkspaceController(core.Controller):
         self.owned = processes
         self.viewer = None
         self.private = os.environ.copy()
+        self.scroll_count = 0
 
     @dbus.service.method(core.IFACE,in_signature='',out_signature='s')
     def Pids(self):
@@ -118,6 +119,39 @@ class WorkspaceController(core.Controller):
         x.XRaiseWindow(self.xkeys.display,window)
         x.XSetInputFocus(self.xkeys.display,window,2,0)
         x.XFlush(self.xkeys.display)
+        self.private_window = window
+
+    def scroll_chat(self, down):
+        self.activate_private()
+        self.xkeys.released()
+        details=subprocess.check_output(['xwininfo','-id',hex(self.private_window)],env=self.private,text=True)
+        def value(label):
+            match=re.search(re.escape(label)+r':\s*(-?\d+)',details)
+            if not match:raise RuntimeError('Не удалось определить область чата')
+            return int(match[1])
+        px=value('Absolute upper-left X')+int(value('Width')*.65)
+        py=value('Absolute upper-left Y')+int(value('Height')*.45)
+        x=self.xkeys.x;xt=self.xkeys.xt;display=self.xkeys.display
+        x.XDefaultRootWindow.argtypes=[C.c_void_p];x.XDefaultRootWindow.restype=C.c_ulong
+        x.XQueryPointer.argtypes=[C.c_void_p,C.c_ulong,C.POINTER(C.c_ulong),C.POINTER(C.c_ulong),
+                                 C.POINTER(C.c_int),C.POINTER(C.c_int),C.POINTER(C.c_int),C.POINTER(C.c_int),C.POINTER(C.c_uint)]
+        root=C.c_ulong();child=C.c_ulong();rx=C.c_int();ry=C.c_int();wx=C.c_int();wy=C.c_int();mask=C.c_uint()
+        have_pointer=x.XQueryPointer(display,x.XDefaultRootWindow(display),C.byref(root),C.byref(child),
+                                    C.byref(rx),C.byref(ry),C.byref(wx),C.byref(wy),C.byref(mask))
+        xt.XTestFakeMotionEvent.argtypes=[C.c_void_p,C.c_int,C.c_int,C.c_int,C.c_ulong]
+        xt.XTestFakeButtonEvent.argtypes=[C.c_void_p,C.c_uint,C.c_int,C.c_ulong]
+        # Both pointer motion and wheel events are confined to the private X server.
+        try:
+            xt.XTestFakeMotionEvent(display,0,px,py,0)
+            for _ in range(6):
+                xt.XTestFakeButtonEvent(display,5 if down else 4,1,0)
+                xt.XTestFakeButtonEvent(display,5 if down else 4,0,0)
+        finally:
+            if have_pointer:xt.XTestFakeMotionEvent(display,0,rx.value,ry.value,0)
+            x.XFlush(display)
+        self.scroll_count+=1
+        self.state('↓ Чат' if down else '↑ Чат',scrollCount=self.scroll_count,
+                   scrollDirection='down' if down else 'up')
 
     def dispatch(self, action):
         if action=='show':

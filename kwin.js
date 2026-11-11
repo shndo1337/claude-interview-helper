@@ -74,7 +74,9 @@ registerShortcut('Claude Interview Toggle','Claude Interview — скрыть / 
   report();
 });
 registerShortcut('Claude Interview Voice','Claude Interview — запись / вставить текст','Ctrl+Alt+V',()=>callDBus(BUS,PATH,IFACE,'Action','voice'));
-registerShortcut('Claude Interview Screenshot','Claude Interview — скрин в чат','Ctrl+Alt+S',()=>callDBus(BUS,PATH,IFACE,'Action','screenshot'));
+registerShortcut('Claude Interview Screenshot','Claude Interview — скрин в чат','Ctrl+Shift+S',()=>callDBus(BUS,PATH,IFACE,'Action','screenshot'));
+registerShortcut('Claude Interview Scroll Up','Claude Interview — чат вверх','Ctrl+Alt+W',()=>callDBus(BUS,PATH,IFACE,'Action','scroll-up'));
+registerShortcut('Claude Interview Scroll Down','Claude Interview — чат вниз','Ctrl+Alt+S',()=>callDBus(BUS,PATH,IFACE,'Action','scroll-down'));
 registerShortcut('Claude Interview Send','Claude Interview — отправить сообщение','Ctrl+Alt+Return',()=>callDBus(BUS,PATH,IFACE,'Action','send'));
 registerShortcut('Claude Interview Focus','Claude Interview — фокус для вставки','',show);
 registerShortcut('Claude Interview Capture Begin','Claude Interview — начало снимка','',()=>{

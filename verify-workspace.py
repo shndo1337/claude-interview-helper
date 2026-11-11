@@ -59,6 +59,7 @@ report={}
 with (STATE/'host-probe.log').open('w') as log:
     process=subprocess.Popen([str(electron),'--ozone-platform=x11',str(probe)],env=env,stdout=log,stderr=log)
     try:
+        wait(lambda:bool(api.EditorReady()),30)
         wait(lambda:host()['focused'])
         initial=len(host()['events'])
         marker='Текст внутри отдельного экрана '+str(time.monotonic_ns())
@@ -67,6 +68,14 @@ with (STATE/'host-probe.log').open('w') as log:
         wait(lambda:marker in state()['text'])
         wait(lambda:json.loads(api.Status())['state']=='Test text inserted')
         report['textInserted']=True
+        component=dbus.Interface(bus.get_object('org.kde.kglobalaccel','/component/kwin'),
+                                 'org.kde.kglobalaccel.Component')
+        component.invokeShortcut('Claude Interview Scroll Down')
+        wait(lambda:state().get('historyScrollTop',0)>0)
+        down=state()['historyScrollTop']
+        component.invokeShortcut('Claude Interview Scroll Up')
+        wait(lambda:state().get('historyScrollTop',0)<down)
+        report['scrollDownAndUp']=True
         api.Action('screenshot')
         wait(lambda:state()['attachments']>=1,25)
         wait(lambda:json.loads(api.Status())['state']=='✓ Скрин в сообщении')

@@ -131,6 +131,11 @@ class Controller(dbus.service.Object):
         try:return self.send_button() is not None
         except Exception:return False
 
+    @dbus.service.method(IFACE,in_signature='',out_signature='b')
+    def EditorReady(self):
+        try:self.editor();return True
+        except Exception:return False
+
     @dbus.service.method(IFACE,in_signature='s',out_signature='s')
     def TestText(self,value):
         if not self.fixture and str(value)!=TEST_MARKER:return 'disabled'
@@ -155,7 +160,7 @@ class Controller(dbus.service.Object):
     @dbus.service.method(IFACE,in_signature='s',out_signature='s')
     def Action(self,action):
         action=str(action)
-        if action not in ['voice','screenshot','send','show','stop','keyboard','validate']:return 'unknown'
+        if action not in ['voice','screenshot','send','show','stop','keyboard','validate','scroll-up','scroll-down']:return 'unknown'
         self.pool.submit(self.dispatch,action)
         return 'queued'
 
@@ -225,6 +230,7 @@ class Controller(dbus.service.Object):
             if action=='voice':self.voice()
             elif action=='screenshot':self.screenshot()
             elif action=='send':self.send()
+            elif action in ['scroll-up','scroll-down']:self.scroll_chat(action=='scroll-down')
             elif action=='show':self.invoke_kwin('focus')
             elif action=='keyboard':
                 self.permission_pending=True
@@ -241,6 +247,9 @@ class Controller(dbus.service.Object):
         match=re.search(r'node\.name\s*=\s*"([^"]+)"',info)
         if not match:raise RuntimeError('Нет устройства звука '+kind)
         return match.group(1)
+
+    def scroll_chat(self, down):
+        raise RuntimeError('Прокрутка доступна в режиме отдельной сессии')
 
     def start_capture(self):
         self.capture_dir=RUNTIME/('record-'+uuid.uuid4().hex)

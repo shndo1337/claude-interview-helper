@@ -1,6 +1,9 @@
 const editor=document.querySelector('textarea'),button=document.querySelector('button');
 let attachments=0,messages=[];
-function state(){button.disabled=!editor.value&&!attachments;window.fixture.state({text:editor.value,attachments,messages,active:document.activeElement?.tagName});}
+const history=document.querySelector('#history');
+for(let i=1;i<=80;i++){const p=document.createElement('p');p.textContent='Тестовая реплика '+i;history.appendChild(p);}
+function state(){button.disabled=!editor.value&&!attachments;window.fixture.state({text:editor.value,attachments,messages,active:document.activeElement?.tagName,historyScrollTop:history.scrollTop});}
+history.addEventListener('scroll',state);
 editor.addEventListener('input',state);
 editor.addEventListener('paste',e=>{
   if([...e.clipboardData.items].some(item=>item.type.startsWith('image/'))){
