@@ -57,23 +57,26 @@ class WorkspaceController(core.Controller):
         self.viewer = None
         self.private = os.environ.copy()
         self.scroll_count = 0
+        self.fitted_size = None
 
     @dbus.service.method(core.IFACE,in_signature='',out_signature='s')
     def Pids(self):
         # Outer KWin manages only the viewer. Claude and its status badge live
         # on the private X server and have no top-level host windows.
-        return json.dumps({'claude':self.viewer.pid if self.viewer else 0,'bridge':0,'permission':False})
+        return json.dumps({'claude':self.viewer.pid if self.viewer and self.viewer.poll() is None else 0,
+                           'bridge':0,'permission':False,'workspace':True})
 
     @dbus.service.method(core.IFACE,in_signature='',out_signature='s')
     def WorkspaceInfo(self):
         return json.dumps({'fixture':self.fixture,'claudePid':self.claude.pid if self.claude else 0,
-                           'viewerPid':self.viewer.pid if self.viewer else 0,'display':os.environ['DISPLAY']})
+                           'viewerPid':self.viewer.pid if self.viewer and self.viewer.poll() is None else 0,'display':os.environ['DISPLAY'],
+                           'fittedSize':self.fitted_size})
 
     def open_viewer(self):
         self.viewer = subprocess.Popen([
             'vncviewer','-Shared','-AcceptClipboard=0','-SendClipboard=0',
             '-SendPrimary=0','-SetPrimary=0','-FullscreenSystemKeys=0',
-            '-RemoteResize=0','-geometry','1080x760',str(IPC/'display.sock'),
+            '-RemoteResize=1','-geometry','1080x760',str(IPC/'display.sock'),
         ],env=HOST,stdout=self.log,stderr=self.log)
         self.owned.append(self.viewer)
 
@@ -99,7 +102,7 @@ class WorkspaceController(core.Controller):
         import threading
         threading.Thread(target=self.wait_ready,daemon=True).start()
 
-    def activate_private(self):
+    def find_private_window(self):
         # Find the actual Claude toplevel by PID on the private display.
         tree=subprocess.check_output(['xwininfo','-root','-tree'],env=self.private,text=True)
         candidates=[]
@@ -112,7 +115,10 @@ class WorkspaceController(core.Controller):
             width=re.search(r'Width:\s*(\d+)',details);height=re.search(r'Height:\s*(\d+)',details)
             if width and height:candidates.append((int(width[1])*int(height[1]),int(window,16)))
         if not candidates:raise RuntimeError('Окно Claude в отдельной сессии ещё загружается')
-        window=max(candidates)[1]
+        return max(candidates)[1]
+
+    def activate_private(self):
+        window=self.find_private_window()
         x=self.xkeys.x
         x.XRaiseWindow.argtypes=[C.c_void_p,C.c_ulong]
         x.XSetInputFocus.argtypes=[C.c_void_p,C.c_ulong,C.c_int,C.c_ulong]
@@ -120,6 +126,29 @@ class WorkspaceController(core.Controller):
         x.XSetInputFocus(self.xkeys.display,window,2,0)
         x.XFlush(self.xkeys.display)
         self.private_window = window
+
+    def fit_private_screen(self):
+        x=self.xkeys.x;display=self.xkeys.display
+        x.XDefaultRootWindow.argtypes=[C.c_void_p];x.XDefaultRootWindow.restype=C.c_ulong
+        x.XGetGeometry.argtypes=[C.c_void_p,C.c_ulong,C.POINTER(C.c_ulong),C.POINTER(C.c_int),
+            C.POINTER(C.c_int),C.POINTER(C.c_uint),C.POINTER(C.c_uint),C.POINTER(C.c_uint),C.POINTER(C.c_uint)]
+        root=C.c_ulong();px=C.c_int();py=C.c_int();width=C.c_uint();height=C.c_uint();border=C.c_uint();depth=C.c_uint()
+        if not x.XGetGeometry(display,x.XDefaultRootWindow(display),C.byref(root),C.byref(px),C.byref(py),
+                             C.byref(width),C.byref(height),C.byref(border),C.byref(depth)):return
+        size=(width.value,height.value)
+        if self.fitted_size==size:return
+        window=self.find_private_window()
+        x.XMoveResizeWindow.argtypes=[C.c_void_p,C.c_ulong,C.c_int,C.c_int,C.c_uint,C.c_uint]
+        x.XMoveResizeWindow(display,window,0,0,max(100,width.value-4),max(100,height.value-4))
+        x.XFlush(display)
+        self.fitted_size=size
+
+    def watch(self):
+        if self.viewer:self.viewer.poll()
+        if not self.stopping:
+            try:self.fit_private_screen()
+            except (RuntimeError,subprocess.SubprocessError):pass
+        return super().watch()
 
     def scroll_chat(self, down):
         self.activate_private()
@@ -143,7 +172,7 @@ class WorkspaceController(core.Controller):
         # Both pointer motion and wheel events are confined to the private X server.
         try:
             xt.XTestFakeMotionEvent(display,0,px,py,0)
-            for _ in range(6):
+            for _ in range(1):
                 xt.XTestFakeButtonEvent(display,5 if down else 4,1,0)
                 xt.XTestFakeButtonEvent(display,5 if down else 4,0,0)
         finally:
@@ -157,7 +186,10 @@ class WorkspaceController(core.Controller):
         if action=='show':
             # Explicitly opening the launcher may focus the viewer; background
             # insertion calls activate_private instead.
-            core.Controller.invoke_kwin(self,'focus')
+            if not self.viewer or self.viewer.poll() is not None:
+                self.open_viewer()
+                GLib.timeout_add(500,self.focus_viewer)
+            else:core.Controller.invoke_kwin(self,'focus')
         else:super().dispatch(action)
 
     def invoke_kwin(self, action):
@@ -165,8 +197,13 @@ class WorkspaceController(core.Controller):
         else: super().invoke_kwin(action)
 
     def wake(self):
-        if self.stopping:return
-        if self.viewer and self.viewer.poll() is not None:self.open_viewer()
+        # Closing the viewer is intentional; background actions keep running.
+        # Only the launcher or explicit show hotkey opens it again.
+        return
+
+    def focus_viewer(self):
+        if not self.stopping:core.Controller.invoke_kwin(self,'focus')
+        return False
 
     def screenshot(self):
         image=STATE/('screen-'+secrets.token_hex(8)+'.png')

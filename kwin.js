@@ -68,6 +68,11 @@ if(workspace.showingDesktopChanged)workspace.showingDesktopChanged.connect(()=>{
   if(!hidden&&!restoring&&mainWindow()&&workspace.showingDesktop)workspace.showingDesktop=false;
 });
 registerShortcut('Claude Interview Toggle','Claude Interview — скрыть / показать','Ctrl+Alt+H',()=>{
+  if(pids.workspace&&!mainWindow()){
+    hidden=false;
+    callDBus(BUS,PATH,IFACE,'Action','show');
+    return;
+  }
   hidden=!hidden;
   windows.forEach(enforce);
   if(!hidden)show();
