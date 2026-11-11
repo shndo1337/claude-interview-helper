@@ -1,0 +1,1 @@
+workspace.windowList().forEach(function(w){if(w.pid===27135){w.keepAbove=false;w.minimized=true;}});
