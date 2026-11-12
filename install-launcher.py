@@ -1,27 +1,34 @@
 #!/usr/bin/env python3
-"""Generate the Plasma launcher for the current checkout location."""
+"""Install distinct launchers for classic and virtual-display helper modes."""
 from pathlib import Path
-import sys
 
-root = Path(__file__).resolve().parent
-target = Path.home() / '.local/share/applications/org.interviewhelper.ClaudeInterview.desktop'
-target.parent.mkdir(parents=True, exist_ok=True)
-# Desktop Entry quoting differs from shell quoting; quoted paths support spaces.
-entry = 'workspace.py' if '--workspace' in sys.argv else 'controller.py'
-script = str(root / entry).replace('\\', '\\\\').replace('"', '\\"').replace('`', '\\`').replace('$', '\\$').replace('%', '%%')
-target.write_text(f'''[Desktop Entry]
+root=Path(__file__).resolve().parent
+applications=Path.home()/'.local/share/applications'
+applications.mkdir(parents=True,exist_ok=True)
+
+
+def install(filename,entry,title,description):
+    script=str(root/entry).replace('\\','\\\\').replace('"','\\"').replace('`','\\`').replace('$','\\$').replace('%','%%')
+    target=applications/filename
+    target.write_text(f'''[Desktop Entry]
 Type=Application
-Name=Claude — собеседование
-Comment=Голос, скриншоты и горячие клавиши для Claude Desktop в Plasma
+Name={title}
+Comment={description}
 Exec=/usr/bin/python3 "{script}" launch
 Icon=/usr/lib/claude-desktop/resources/icon.png
 Terminal=false
-Categories=Utility;
+Categories=X-PlasmaTools;
 StartupNotify=true
 Actions=Stop;
 
 [Desktop Action Stop]
-Name=Выключить режим собеседования
+Name=Выключить этот режим
 Exec=/usr/bin/python3 "{script}" stop
 ''')
-print(target)
+    print(target)
+
+
+install('org.interviewhelper.ClaudeInterview.desktop','controller.py',
+        'Claude — собес (обычный)','Окно Claude прямо на рабочем столе Plasma')
+install('org.interviewhelper.ClaudeInterviewWorkspace.desktop','workspace.py',
+        'Claude — собес (TigerVNC)','Claude на отдельном виртуальном экране с локальным окном просмотра')

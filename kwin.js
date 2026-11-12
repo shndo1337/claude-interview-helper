@@ -3,6 +3,7 @@ const BUS='org.interviewhelper.ClaudeInterview', PATH='/org/interviewhelper/Clau
 const windows=new Map();
 const CHAT_OPACITY=0.90;
 let pids={claude:0,bridge:0}, hidden=false, capture=false, restoring=false,lastMain=null;
+let scrollRegistered=false;
 function report(){
   const rows=[];
   windows.forEach(r=>rows.push({id:String(r.w.internalId),pid:r.w.pid,aux:r.aux,
@@ -47,6 +48,11 @@ function refresh(){
   callDBus(BUS,PATH,IFACE,'Pids',function(value){
     try{
       pids=JSON.parse(value);
+      if(pids.workspace&&!scrollRegistered){
+        scrollRegistered=true;
+        registerShortcut('Claude Interview Scroll Up','Claude Interview — чат вверх','Ctrl+Alt+W',()=>callDBus(BUS,PATH,IFACE,'Action','scroll-up'));
+        registerShortcut('Claude Interview Scroll Down','Claude Interview — чат вниз','Ctrl+Alt+S',()=>callDBus(BUS,PATH,IFACE,'Action','scroll-down'));
+      }
       workspace.windowList().forEach(w=>{
         attach(w);
         if(pids.permission&&String(w.resourceClass).indexOf('portal')>=0){w.keepAbove=true;workspace.activeWindow=w;}
@@ -80,8 +86,6 @@ registerShortcut('Claude Interview Toggle','Claude Interview — скрыть / 
 });
 registerShortcut('Claude Interview Voice','Claude Interview — запись / вставить текст','Ctrl+Alt+V',()=>callDBus(BUS,PATH,IFACE,'Action','voice'));
 registerShortcut('Claude Interview Screenshot','Claude Interview — скрин в чат','Ctrl+Shift+S',()=>callDBus(BUS,PATH,IFACE,'Action','screenshot'));
-registerShortcut('Claude Interview Scroll Up','Claude Interview — чат вверх','Ctrl+Alt+W',()=>callDBus(BUS,PATH,IFACE,'Action','scroll-up'));
-registerShortcut('Claude Interview Scroll Down','Claude Interview — чат вниз','Ctrl+Alt+S',()=>callDBus(BUS,PATH,IFACE,'Action','scroll-down'));
 registerShortcut('Claude Interview Send','Claude Interview — отправить сообщение','Ctrl+Alt+Return',()=>callDBus(BUS,PATH,IFACE,'Action','send'));
 registerShortcut('Claude Interview Focus','Claude Interview — фокус для вставки','',show);
 registerShortcut('Claude Interview Capture Begin','Claude Interview — начало снимка','',()=>{

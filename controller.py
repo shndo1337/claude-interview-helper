@@ -24,6 +24,7 @@ from gi.repository import Atspi, GLib
 from xkeys import XKeys
 from portal_keys import PortalKeys
 from live_audio import LiveAudio
+from launch_modes import prepare_launch, running_helper
 
 ROOT=Path(__file__).resolve().parent
 RUNTIME=ROOT/'runtime'
@@ -466,11 +467,16 @@ def main():
     dbus.mainloop.glib.threads_init();DBusGMainLoop(set_as_default=True);bus=dbus.SessionBus()
     command=sys.argv[1] if len(sys.argv)>1 else 'launch'
     if command in ['launch','stop','voice','screenshot','send','status']:
-        if bus.name_has_owner(BUS):
-            obj=bus.get_object(BUS,OBJECT);iface=dbus.Interface(obj,IFACE)
-            print(iface.Status() if command=='status' else iface.Action('show' if command=='launch' else command));return
+        if command=='launch':
+            if not bus.name_has_owner('org.kde.KWin'):raise RuntimeError('Этот режим нужно запускать в Plasma')
+            iface=prepare_launch(bus,'classic')
+            if iface:print(iface.Action('show'));return
+        else:
+            iface,mode=running_helper(bus)
+            if iface:
+                if command=='stop' and mode!='classic':print('Обычный режим не запущен');return
+                print(iface.Status() if command=='status' else iface.Action(command));return
         if command!='launch':raise RuntimeError('Режим собеседования не запущен')
-        if 'KDE' not in os.environ.get('XDG_CURRENT_DESKTOP',''):raise RuntimeError('Этот режим нужно запускать в Plasma')
         subprocess.run(['systemd-run','--user','--unit=claude-interview','--collect','--service-type=exec',
             '/usr/bin/python3',str(ROOT/'controller.py'),'run'],check=True)
         return

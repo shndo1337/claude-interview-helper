@@ -25,6 +25,7 @@ from gi.repository import Atspi, GLib
 
 import controller as core
 from xkeys import XKeys
+from launch_modes import prepare_launch, running_helper
 
 ROOT = Path(__file__).resolve().parent
 STATE = ROOT/'runtime/workspace'
@@ -233,16 +234,14 @@ def main():
     command=sys.argv[1] if len(sys.argv)>1 else 'launch'
     if command in ['launch','stop','status']:
         bus=dbus.SessionBus()
-        if bus.name_has_owner(core.BUS):
-            api=dbus.Interface(bus.get_object(core.BUS,core.OBJECT),core.IFACE)
-            if command=='status':print(api.Status());return
-            if command=='stop':print(api.Action('stop'));return
-            try:
-                api.WorkspaceInfo()
-                print(api.Action('show'));return
-            except dbus.DBusException:pass
-        elif command!='launch':
-            print('Отдельная сессия не запущена');return
+        if command=='launch':
+            if not bus.name_has_owner('org.kde.KWin'):raise RuntimeError('Этот режим нужно запускать в Plasma')
+            api=prepare_launch(bus,'workspace')
+            if api:print(api.Action('show'));return
+        else:
+            api,mode=running_helper(bus)
+            if not api or mode!='workspace':print('Режим TigerVNC не запущен');return
+            print(api.Status() if command=='status' else api.Action('stop'));return
         subprocess.run(['systemd-run','--user','--unit=claude-workspace','--collect','--service-type=exec',
                         '/usr/bin/python3',str(ROOT/'workspace.py'),'run'],check=True)
         return
@@ -309,4 +308,4 @@ def main():
 if __name__=='__main__':
     try:main()
     except Exception as error:
-        print(str(error),file=sys.stderr);sys.exit(1)
+        print(str(error),file=sys.stderr);core.notify(str(error));sys.exit(1)
