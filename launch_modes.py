@@ -10,12 +10,16 @@ def running_helper(bus):
     if not bus.name_has_owner(NAME):return None,None
     api=dbus.Interface(bus.get_object(NAME,PATH),NAME)
     try:
-        api.WorkspaceInfo()
-        return api,'workspace'
+        info=json.loads(api.WorkspaceInfo())
+        return api,'codex-workspace' if info.get('backend')=='codex' else 'workspace'
     except dbus.DBusException as error:
         if error.get_dbus_name() not in ['org.freedesktop.DBus.Error.UnknownMethod',
                                          'org.freedesktop.DBus.Error.UnknownInterface']:raise
-        return api,'classic'
+        try:
+            return api,'codex-classic' if api.Backend()=='codex' else 'classic'
+        except dbus.DBusException as backend_error:
+            if backend_error.get_dbus_name()!='org.freedesktop.DBus.Error.UnknownMethod':raise
+            return api,'classic'
 
 def prepare_launch(bus,wanted):
     api,mode=running_helper(bus)

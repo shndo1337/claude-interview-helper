@@ -34,6 +34,43 @@ OBJECT='/org/interviewhelper/ClaudeInterview'
 IFACE=BUS
 SCRIPT='claude-interview-mode'
 TEST_MARKER='Проверка режима (не отправлять).'
+CODEX_EXECUTABLE='/usr/lib/chatgpt/ChatGPT'
+CLAUDE_EXECUTABLE='/usr/lib/claude-desktop/claude-desktop'
+
+
+def codex_window_command(profile=None):
+    config=ROOT/'runtime/codex-interview/thread.json'
+    thread_id=uuid.UUID(json.loads(config.read_text())['threadId'])
+    command=['/usr/bin/chatgpt','--force-renderer-accessibility']
+    if profile:
+        # Chromium checks its profile lock before the application handles the
+        # deep link. The application also needs its own matching profile path.
+        command.extend(['--ozone-platform=x11',f'--user-data-dir={profile}'])
+    return [*command,f'codex://threads/{thread_id}']
+
+
+def codex_environment(profile=None):
+    env=os.environ.copy()
+    env.pop('ELECTRON_RUN_AS_NODE',None)
+    env.pop('CODEX_ELECTRON_USER_DATA_PATH',None)
+    if profile:
+        env['CODEX_ELECTRON_USER_DATA_PATH']=str(profile)
+    return env
+
+
+def find_native_codex():
+    for proc in Path('/proc').glob('[0-9]*'):
+        try:
+            if str((proc/'exe').resolve())!=CODEX_EXECUTABLE:continue
+            if any(arg.startswith(b'--type=') for arg in (proc/'cmdline').read_bytes().split(b'\0')):continue
+            if any(entry.startswith(b'CODEX_ELECTRON_USER_DATA_PATH=')
+                   for entry in (proc/'environ').read_bytes().split(b'\0')):continue
+            return int(proc.name)
+        except (FileNotFoundError,PermissionError,ProcessLookupError):
+            continue
+    return None
+
+
 SHORTCUTS={
     'focus':'Claude Interview Focus','capture-begin':'Claude Interview Capture Begin',
     'capture-end':'Claude Interview Capture End','restore':'Claude Interview Restore',
@@ -42,9 +79,11 @@ SHORTCUTS={
 
 
 class ExistingClaude:
-    def __init__(self,pid):self.pid=pid
+    def __init__(self,pid,executable=CLAUDE_EXECUTABLE):
+        self.pid=pid
+        self.executable=executable
     def poll(self):
-        try:return None if str(Path(f'/proc/{self.pid}/exe').resolve())=='/usr/lib/claude-desktop/claude-desktop' else 0
+        try:return None if str(Path(f'/proc/{self.pid}/exe').resolve())==self.executable else 0
         except (OSError,ProcessLookupError):return 0
 
 
@@ -93,6 +132,7 @@ class Controller(dbus.service.Object):
         super().__init__(self.name,OBJECT)
         self.log=(RUNTIME/'controller.log').open('a',buffering=1)
         self.fixture=fixture;self.claude=None;self.bridge=None;self.script=None
+        self.backend='codex' if '--codex' in sys.argv else 'claude'
         self.capture=None;self.capture_dir=None;self.capture_timer=None
         self.live_audio=None;self.recording_id=None
         self.pool=ThreadPoolExecutor(max_workers=1);self.stopping=False
@@ -126,6 +166,9 @@ class Controller(dbus.service.Object):
 
     @dbus.service.method(IFACE,in_signature='',out_signature='s')
     def Status(self):return json.dumps(self.latest,ensure_ascii=False)
+
+    @dbus.service.method(IFACE,in_signature='',out_signature='s')
+    def Backend(self):return self.backend
 
     @dbus.service.method(IFACE,in_signature='',out_signature='b')
     def CanSend(self):
@@ -175,10 +218,18 @@ class Controller(dbus.service.Object):
         dbus.Interface(component,'org.kde.kglobalaccel.Component').invokeShortcut(SHORTCUTS[action])
 
     def start(self):
-        if not self.fixture:
+        if not self.fixture and self.backend=='codex':
+            # The protocol handler focuses the existing desktop app and opens
+            # the requested thread, even when this invocation exits immediately.
+            subprocess.Popen(codex_window_command(),env=codex_environment(),stdout=self.log,stderr=self.log)
+            deadline=time.monotonic()+15
+            while not (pid:=find_native_codex()) and time.monotonic()<deadline:time.sleep(.1)
+            if not pid:raise RuntimeError('Не удалось запустить штатное приложение Codex')
+            self.claude=ExistingClaude(pid,CODEX_EXECUTABLE)
+        elif not self.fixture:
             for process in Path('/proc').glob('[0-9]*'):
                 try:
-                    if str((process/'exe').resolve())!='/usr/lib/claude-desktop/claude-desktop':continue
+                    if str((process/'exe').resolve())!=CLAUDE_EXECUTABLE:continue
                     args=(process/'cmdline').read_bytes().replace(b'\0',b' ')
                     if b'--type=' not in args:
                         if b'--force-renderer-accessibility' not in args:
@@ -221,7 +272,7 @@ class Controller(dbus.service.Object):
         return not self.stopping
 
     def wake(self):
-        if self.fixture or self.stopping or time.monotonic()-self.last_wake<3:return
+        if self.fixture or self.backend=='codex' or self.stopping or time.monotonic()-self.last_wake<3:return
         if self.activation and self.activation.poll() is None:return
         self.last_wake=time.monotonic()
         self.activation=subprocess.Popen(['/usr/bin/claude-desktop'],stdout=self.log,stderr=self.log)
@@ -466,19 +517,33 @@ def main():
     RUNTIME.mkdir(parents=True,exist_ok=True,mode=0o700);RUNTIME.chmod(0o700)
     dbus.mainloop.glib.threads_init();DBusGMainLoop(set_as_default=True);bus=dbus.SessionBus()
     command=sys.argv[1] if len(sys.argv)>1 else 'launch'
+    codex_backend='--codex' in sys.argv
+    mode_name='codex-classic' if codex_backend else 'classic'
+    backend_args=['--codex'] if codex_backend else []
     if command in ['launch','stop','voice','screenshot','send','status']:
         if command=='launch':
-            if not bus.name_has_owner('org.kde.KWin'):raise RuntimeError('Этот режим нужно запускать в Plasma')
-            iface=prepare_launch(bus,'classic')
-            if iface:print(iface.Action('show'));return
+            if not bus.name_has_owner('org.kde.KWin'):
+                if not codex_backend:raise RuntimeError('Этот режим нужно запускать в Plasma')
+                subprocess.Popen(codex_window_command(),env=codex_environment(),start_new_session=True,
+                                 stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                return
+            iface=prepare_launch(bus,mode_name)
+            if iface:
+                if codex_backend:
+                    subprocess.Popen(codex_window_command(),env=codex_environment(),start_new_session=True,
+                                     stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                print(iface.Action('show'));return
         else:
             iface,mode=running_helper(bus)
             if iface:
-                if command=='stop' and mode!='classic':print('Обычный режим не запущен');return
+                if command=='stop' and mode!=mode_name:print('Этот режим не запущен');return
                 print(iface.Status() if command=='status' else iface.Action(command));return
+            if command=='stop' and codex_backend:
+                print('Помощник Codex не запущен')
+                return
         if command!='launch':raise RuntimeError('Режим собеседования не запущен')
         subprocess.run(['systemd-run','--user','--unit=claude-interview','--collect','--service-type=exec',
-            '/usr/bin/python3',str(ROOT/'controller.py'),'run'],check=True)
+            '/usr/bin/python3',str(ROOT/'controller.py'),'run',*backend_args],check=True)
         return
     fixture=command=='fixture'
     lock=(RUNTIME/'controller.lock').open('w');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)

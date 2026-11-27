@@ -69,7 +69,7 @@ class WorkspaceController(core.Controller):
 
     @dbus.service.method(core.IFACE,in_signature='',out_signature='s')
     def WorkspaceInfo(self):
-        return json.dumps({'fixture':self.fixture,'claudePid':self.claude.pid if self.claude else 0,
+        return json.dumps({'fixture':self.fixture,'backend':self.backend,'claudePid':self.claude.pid if self.claude else 0,
                            'viewerPid':self.viewer.pid if self.viewer and self.viewer.poll() is None else 0,'display':os.environ['DISPLAY'],
                            'fittedSize':self.fitted_size})
 
@@ -83,7 +83,12 @@ class WorkspaceController(core.Controller):
 
     def start(self):
         self.bridge = core.SpeechBridge(self.log)
-        if self.fixture:
+        if self.backend=='codex':
+            profile=STATE/'codex-profile'
+            profile.mkdir(mode=0o700,exist_ok=True)
+            self.private=core.codex_environment(profile)
+            command=core.codex_window_command(profile)
+        elif self.fixture:
             command=[str(core.ELECTRON),'--ozone-platform=x11','--class=claude-workspace-test',
                      '--force-renderer-accessibility',str(ROOT/'fixture.cjs')]
         else:
@@ -232,18 +237,21 @@ class WorkspaceController(core.Controller):
 
 def main():
     command=sys.argv[1] if len(sys.argv)>1 else 'launch'
+    codex_backend='--codex' in sys.argv
+    mode_name='codex-workspace' if codex_backend else 'workspace'
+    backend_args=['--codex'] if codex_backend else []
     if command in ['launch','stop','status']:
         bus=dbus.SessionBus()
         if command=='launch':
             if not bus.name_has_owner('org.kde.KWin'):raise RuntimeError('Этот режим нужно запускать в Plasma')
-            api=prepare_launch(bus,'workspace')
+            api=prepare_launch(bus,mode_name)
             if api:print(api.Action('show'));return
         else:
             api,mode=running_helper(bus)
-            if not api or mode!='workspace':print('Режим TigerVNC не запущен');return
+            if not api or mode!=mode_name:print('Этот режим TigerVNC не запущен');return
             print(api.Status() if command=='status' else api.Action('stop'));return
         subprocess.run(['systemd-run','--user','--unit=claude-workspace','--collect','--service-type=exec',
-                        '/usr/bin/python3',str(ROOT/'workspace.py'),'run'],check=True)
+                        '/usr/bin/python3',str(ROOT/'workspace.py'),'run',*backend_args],check=True)
         return
     STATE.mkdir(parents=True,exist_ok=True,mode=0o700);STATE.chmod(0o700)
     lock=(STATE/'session.lock').open('w')

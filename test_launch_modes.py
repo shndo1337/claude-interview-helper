@@ -6,17 +6,21 @@ from launch_modes import prepare_launch,running_helper
 
 
 class ModeTests(unittest.TestCase):
-    def api(self,workspace=False,recording=False):
+    def api(self,workspace=False,recording=False,backend='claude'):
         api=Mock()
-        if not workspace:
+        api.Backend.return_value=backend
+        if workspace:
+            api.WorkspaceInfo.return_value=json.dumps({'backend':backend})
+        else:
             api.WorkspaceInfo.side_effect=dbus.DBusException('unknown',name='org.freedesktop.DBus.Error.UnknownMethod')
         api.Status.return_value=json.dumps({'recording':recording})
         return api
 
     def test_same_mode_reuses_existing_helper(self):
-        for workspace,wanted in [(False,'classic'),(True,'workspace')]:
+        for workspace,wanted,backend in [(False,'classic','claude'),(True,'workspace','claude'),
+                                        (False,'codex-classic','codex'),(True,'codex-workspace','codex')]:
             bus=Mock();bus.name_has_owner.return_value=True
-            api=self.api(workspace)
+            api=self.api(workspace,backend=backend)
             with patch('launch_modes.dbus.Interface',return_value=api):
                 self.assertIs(prepare_launch(bus,wanted),api)
             api.Action.assert_not_called()

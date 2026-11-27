@@ -81,7 +81,7 @@ def collect():
         if entry.get('Hidden','').lower()=='true' or entry.get('NoDisplay','').lower()=='true':continue
         categories=entry.get('Categories','').split(';')
         only=set(filter(None,entry.get('OnlyShowIn','').split(';')))
-        if (name.startswith(('org.kde.','org.interviewhelper.ClaudeInterview')) or 'KDE' in categories
+        if (name.startswith(('org.kde.','org.interviewhelper.ClaudeInterview','org.interviewhelper.CodexInterview')) or 'KDE' in categories
             or CATEGORY in categories or only=={'KDE'}
             or name in ['systemsettings.desktop','kdesystemsettings.desktop','xtigervncviewer.desktop','meetingly-local.desktop']):
             chosen[name]=file
@@ -89,8 +89,9 @@ def collect():
 
 
 def main():
-    for name in ['org.interviewhelper.ClaudeInterview.desktop','org.interviewhelper.ClaudeInterviewWorkspace.desktop']:
-        backup(APPS/name)
+    for backend in ['Claude','Codex']:
+        for suffix in ['','Workspace']:
+            backup(APPS/f'org.interviewhelper.{backend}Interview{suffix}.desktop')
     subprocess.run(['/usr/bin/python3',str(ROOT/'install-launcher.py')],check=True)
     chosen=collect()
     for name,file in chosen.items():write(APPS/name,categorize(file.read_text()))
