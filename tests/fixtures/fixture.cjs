@@ -1,6 +1,6 @@
 const {app,BrowserWindow,ipcMain}=require('electron');
 const fs=require('node:fs'),path=require('node:path');
-const runtime=process.env.CLAUDE_HELPER_RUNTIME||path.join(__dirname,'runtime');
+const runtime=process.env.CLAUDE_HELPER_RUNTIME||path.resolve(__dirname,'../../runtime');
 app.setPath('userData',path.join(runtime,'fixture-profile'));
 app.whenReady().then(()=>{
   ipcMain.on('fixture:state',(_e,state)=>fs.writeFileSync(path.join(runtime,'fixture-state.json'),JSON.stringify(state,null,2)));

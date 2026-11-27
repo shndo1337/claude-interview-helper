@@ -12,11 +12,12 @@ from pathlib import Path
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import xml.etree.ElementTree as ET
 from gi.repository import Gio
 
-ROOT=Path(__file__).resolve().parent
+from interview_helper.paths import ROOT
 HOME=Path.home()
 APPS=HOME/'.local/share/applications'
 CATEGORY='X-PlasmaTools'
@@ -92,7 +93,7 @@ def main():
     for backend in ['Claude','Codex']:
         for suffix in ['','Workspace']:
             backup(APPS/f'org.interviewhelper.{backend}Interview{suffix}.desktop')
-    subprocess.run(['/usr/bin/python3',str(ROOT/'install-launcher.py')],check=True)
+    subprocess.run([sys.executable, '-m', 'tools.install_launchers'], cwd=ROOT, check=True)
     chosen=collect()
     for name,file in chosen.items():write(APPS/name,categorize(file.read_text()))
     directory='interview-helper-plasma-tools.directory'

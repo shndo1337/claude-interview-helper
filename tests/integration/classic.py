@@ -6,7 +6,7 @@ import subprocess
 import time
 import dbus
 
-ROOT=Path(__file__).resolve().parent
+from interview_helper.paths import ROOT
 R=ROOT/'runtime'
 bus=dbus.SessionBus()
 api=dbus.Interface(bus.get_object('org.interviewhelper.ClaudeInterview','/org/interviewhelper/ClaudeInterview'),'org.interviewhelper.ClaudeInterview')
@@ -65,7 +65,7 @@ try:
     key('Send');wait(lambda:len(read('fixture-state.json')['messages'])==base+3)
     record('voice_message_sent')
     pids=json.loads(api.Pids())
-    probe=ROOT/'verify-window.js'
+    probe=Path(__file__).with_name('verify-window.js')
     probe.write_text('workspace.windowList().forEach(function(w){if(w.pid==='+str(pids['claude'])+'){w.keepAbove=false;w.minimized=true;}});')
     scripting=dbus.Interface(bus.get_object('org.kde.KWin','/Scripting'),'org.kde.kwin.Scripting')
     scripting.loadScript(str(probe),'claude-interview-check',signature='ss');scripting.start()

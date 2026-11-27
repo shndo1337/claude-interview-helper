@@ -3,13 +3,14 @@
 from pathlib import Path
 import sys
 
-root=Path(__file__).resolve().parent
+from interview_helper.paths import ROOT
+
 applications=Path.home()/'.local/share/applications'
 applications.mkdir(parents=True,exist_ok=True)
 
 
 def install(filename,entry,title,description,backend='claude'):
-    script=str(root/entry).replace('\\','\\\\').replace('"','\\"').replace('`','\\`').replace('$','\\$').replace('%','%%')
+    script=str(ROOT/entry).replace('\\','\\\\').replace('"','\\"').replace('`','\\`').replace('$','\\$').replace('%','%%')
     target=applications/filename
     codex=backend=='codex'
     flags=' --codex' if codex else ''

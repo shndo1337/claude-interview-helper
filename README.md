@@ -75,13 +75,13 @@ parent/
 Из корня репозитория выполните:
 
 ```bash
-/usr/bin/python3 install-launcher.py
+/usr/bin/python3 -m tools.install_launchers
 ```
 
 Скрипт создаёт четыре пользовательских ярлыка в `~/.local/share/applications/`. Флаг `--codex-only` создаёт только ярлыки Codex. Чтобы собрать ярлыки и служебные приложения KDE в папку **«Plasma и инструменты»**, используйте:
 
 ```bash
-/usr/bin/python3 organize-apps.py
+/usr/bin/python3 -m tools.organize_apps
 ```
 
 Этот скрипт также создаёт ярлыки и сохраняет резервные копии изменённых настроек меню в `runtime/menu-layout-backups/`.
@@ -115,17 +115,29 @@ parent/
 - Если голос не распознаётся, проверьте стандартные устройства ввода и вывода, громкость и пути к модели и нативным библиотекам. При ошибке запуска смотрите `runtime/controller.log` или `runtime/workspace/session.log` и `runtime/workspace/controller.log` для TigerVNC.
 - Если Codex открывает другой чат, проверьте `threadId` и доступность этого чата в используемом профиле. Если обычный Claude не принимает вставку, полностью выйдите из клиента и запустите его ярлыком помощника для включения доступности редактора.
 
-## Проверка и исходники
+## Структура проекта
 
-```bash
-/usr/bin/python3 -m unittest -v test_launch_modes test_live_audio
+```text
+interview_helper/
+├── clients.py       # Запуск и обнаружение клиентов Claude и Codex
+├── controller.py    # Захват, черновик и пользовательская служба
+├── workspace.py     # Виртуальный экран и просмотрщик TigerVNC
+├── desktop/         # Правила KWin и клавиатурный ввод
+└── speech/          # Потоковое аудио, мост Electron и распознавание
+tools/               # Установка ярлыков, группировка меню и перенос истории
+tests/               # Модульные тесты, интеграционные проверки и тестовое окно
 ```
 
-Тесты покрывают выбор режима, запрет переключения во время записи и потоковую передачу аудиоданных. Скрипты `verify-workspace.py` и `verify-viewer.py` проверяют виртуальный экран на локальном тестовом окне. Порядок запусков, результаты прежних проверок и заметки о переносе локальной истории Claude Code собраны в [CHANGELOG.md](CHANGELOG.md).
+Файлы `controller.py` и `workspace.py` в корне служат точками входа для установленных ярлыков. Все настройки и рабочие данные по-прежнему лежат в `runtime/`.
 
-- [controller.py](controller.py) управляет захватом, черновиком и пользовательской службой.
-- [workspace.py](workspace.py) запускает отдельный экран и просмотрщик.
-- [kwin.js](kwin.js) настраивает горячие клавиши и поведение окон в Plasma.
-- [live_audio.py](live_audio.py), [bridge.cjs](bridge.cjs) и [speech-worker.cjs](speech-worker.cjs) передают звук и распознают речь.
+Для переноса локальной истории вкладки Claude Code сначала остановите отдельный сеанс Claude. Затем выполните `python3 -m tools.migrate_code_history` и снова откройте ярлык TigerVNC.
+
+## Проверка
+
+```bash
+/usr/bin/python3 -m unittest discover -s tests/unit -v
+```
+
+Тесты покрывают выбор режима, запрет переключения во время записи и потоковую передачу аудиоданных. В `tests/integration/` есть проверки локального тестового окна. `node tests/integration/speech.cjs` запускает проверку распознавания на публичной записи FLEURS из `meetingly-local/fleurs-russian.wav`. Результаты прежних проверок и история изменений собраны в [CHANGELOG.md](CHANGELOG.md).
 
 Речевой модуль использует подход и интерфейсы из Meetingly. Текст соответствующей лицензии сохранён в [LICENSES/Meetingly-Apache-2.0.txt](LICENSES/Meetingly-Apache-2.0.txt).

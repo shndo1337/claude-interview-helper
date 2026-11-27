@@ -12,7 +12,9 @@ import time
 from types import MethodType, SimpleNamespace
 import uuid
 
-from controller import Controller, SpeechBridge, ROOT, RUNTIME
+from interview_helper.controller import Controller
+from interview_helper.paths import ROOT, RUNTIME
+from interview_helper.speech.bridge import SpeechBridge
 
 
 def nodes():
@@ -38,6 +40,7 @@ def main():
     bridge = controller = None
     report = {}
     sample = ROOT.parent/'meetingly-local/fleurs-russian.wav'
+    RUNTIME.mkdir(mode=0o700, exist_ok=True)
     with (RUNTIME/'streaming-pipeline.log').open('w') as log, ThreadPoolExecutor(max_workers=1) as pool:
         try:
             for name in [mic_sink, system_sink]:
@@ -60,7 +63,7 @@ def main():
             if not bridge.ready.wait(30) or bridge.failure:
                 raise RuntimeError(bridge.failure or 'Recognizer did not load')
             states, drafts = [], []
-            controller = SimpleNamespace(bridge=bridge,log=log,pool=pool,capture=None,capture_dir=None,
+            controller = SimpleNamespace(runtime=RUNTIME,bridge=bridge,log=log,pool=pool,capture=None,capture_dir=None,
                                          capture_timer=None,live_audio=None,recording_id=None)
             controller.audio_node = lambda kind: mic_source if kind=='SOURCE' else system_sink
             controller.state = lambda state,**extra: states.append({'state':state,**extra})

@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import Mock,patch
 import dbus
-from launch_modes import prepare_launch,running_helper
+from interview_helper.launch_modes import prepare_launch,running_helper
 
 
 class ModeTests(unittest.TestCase):
@@ -21,7 +21,7 @@ class ModeTests(unittest.TestCase):
                                         (False,'codex-classic','codex'),(True,'codex-workspace','codex')]:
             bus=Mock();bus.name_has_owner.return_value=True
             api=self.api(workspace,backend=backend)
-            with patch('launch_modes.dbus.Interface',return_value=api):
+            with patch('interview_helper.launch_modes.dbus.Interface',return_value=api):
                 self.assertIs(prepare_launch(bus,wanted),api)
             api.Action.assert_not_called()
 
@@ -29,21 +29,21 @@ class ModeTests(unittest.TestCase):
         for workspace,wanted in [(False,'workspace'),(True,'classic')]:
             bus=Mock();bus.name_has_owner.side_effect=[True,False,False]
             api=self.api(workspace)
-            with patch('launch_modes.dbus.Interface',return_value=api):
+            with patch('interview_helper.launch_modes.dbus.Interface',return_value=api):
                 self.assertIsNone(prepare_launch(bus,wanted))
             api.Action.assert_called_once_with('stop')
 
     def test_switch_does_not_discard_an_active_recording(self):
         bus=Mock();bus.name_has_owner.return_value=True
         api=self.api(recording=True)
-        with patch('launch_modes.dbus.Interface',return_value=api):
+        with patch('interview_helper.launch_modes.dbus.Interface',return_value=api):
             with self.assertRaisesRegex(RuntimeError,'запись'):prepare_launch(bus,'workspace')
         api.Action.assert_not_called()
 
     def test_transport_errors_are_not_treated_as_classic_mode(self):
         bus=Mock();bus.name_has_owner.return_value=True
         api=self.api();api.WorkspaceInfo.side_effect=dbus.DBusException('denied',name='org.freedesktop.DBus.Error.AccessDenied')
-        with patch('launch_modes.dbus.Interface',return_value=api):
+        with patch('interview_helper.launch_modes.dbus.Interface',return_value=api):
             with self.assertRaises(dbus.DBusException):running_helper(bus)
         api.Action.assert_not_called()
 

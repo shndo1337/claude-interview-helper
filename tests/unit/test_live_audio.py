@@ -6,7 +6,7 @@ import tempfile
 import threading
 import unittest
 
-from live_audio import LiveAudio
+from interview_helper.speech.live_audio import LiveAudio
 
 
 class Bridge:

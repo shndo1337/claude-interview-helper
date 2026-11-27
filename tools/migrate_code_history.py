@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import tempfile
 
-ROOT=Path(__file__).resolve().parent
+from interview_helper.paths import ROOT
 SOURCE=Path.home()/'.config/Claude'
 TARGET=ROOT/'runtime/workspace/claude-profile'
 

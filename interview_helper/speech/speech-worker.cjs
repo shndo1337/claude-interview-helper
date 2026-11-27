@@ -1,7 +1,7 @@
 // Nemotron streaming, with one persistent model and separate microphone/call sessions.
 // Uses the same transcribe.cpp 0.2.4 ABI as Meetingly's asr-worker.ts.
 const path = require('node:path');
-const koffi = require(path.resolve(__dirname, '../meetingly-review/app/node_modules/koffi'));
+const koffi = require(path.resolve(__dirname, '../../../meetingly-review/app/node_modules/koffi'));
 const port = process.parentPort || {
   postMessage: value => process.send(value),
   on: (_event, listener) => process.on('message', data => listener({data})),

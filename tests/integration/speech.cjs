@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {fork} = require('node:child_process');
 const {setTimeout: sleep} = require('node:timers/promises');
-const root = __dirname;
+const root = path.resolve(__dirname, '../..');
 const shared = path.resolve(root, '../meetingly-review/app');
 const audio = fs.readFileSync(path.resolve(root, '../meetingly-local/fleurs-russian.wav'));
 let mono;
@@ -14,8 +14,9 @@ for(let offset=12; offset+8<=audio.length;) {
   offset+=8+size+(size%2);
 }
 assert(mono?.length);
+fs.mkdirSync(path.join(root, 'runtime'), {recursive: true, mode: 0o700});
 const log = fs.openSync(path.join(root,'runtime/streaming-test-native.log'),'w');
-const worker = fork(path.join(root,'speech-worker.cjs'),[],{
+const worker = fork(path.join(root,'interview_helper/speech/speech-worker.cjs'),[],{
   stdio:['ignore','ignore',log,'ipc'],serialization:'advanced',
 });
 const pending = new Map(), events = [];

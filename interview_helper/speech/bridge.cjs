@@ -2,7 +2,7 @@ const {app, BrowserWindow, clipboard, ClipboardItem, utilityProcess, screen} = r
 const fs = require('node:fs');
 const path = require('node:path');
 const readline = require('node:readline');
-const root = __dirname;
+const root = path.resolve(__dirname, '../..');
 const shared = path.resolve(root, '../meetingly-review/app');
 const runtime = process.env.CLAUDE_HELPER_RUNTIME || path.join(root, 'runtime');
 fs.mkdirSync(runtime, {recursive: true, mode: 0o700});
@@ -39,7 +39,7 @@ app.whenReady().then(() => {
     <style>body{margin:0;font:13px system-ui;color:#eee;background:#222e;border-radius:9px;padding:6px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}</style>
     <body>● Подготовка…</body>`));
   badge.once('ready-to-show',()=>badge.showInactive());
-  worker=utilityProcess.fork(path.join(root,'speech-worker.cjs'),[],{stdio:'ignore',serviceName:'Claude Interview speech'});
+  worker=utilityProcess.fork(path.join(__dirname,'speech-worker.cjs'),[],{stdio:'ignore',serviceName:'Claude Interview speech'});
   worker.on('message',msg=>{
     if(msg.event==='ready'){ready=true;write(msg);}
     else if(pending.has(msg.id)){

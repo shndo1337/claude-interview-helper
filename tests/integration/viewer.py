@@ -10,7 +10,7 @@ import time
 import uuid
 import dbus
 
-ROOT=Path(__file__).resolve().parent
+from interview_helper.paths import ROOT
 bus=dbus.SessionBus()
 api=dbus.Interface(bus.get_object('org.interviewhelper.ClaudeInterview','/org/interviewhelper/ClaudeInterview'),
                    'org.interviewhelper.ClaudeInterview')
